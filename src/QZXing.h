@@ -18,11 +18,11 @@
 #define QZXING_H
 
 #include "QZXing_global.h"
-#include "zxing/ZXing.h"
 
 #include <QObject>
 #include <QImage>
 #include <QVariantList>
+#include <QElapsedTimer>
 
 #include <set>
 
@@ -36,6 +36,10 @@ class MultiFormatReader;
 class ResultMetadata;
 }
 class ImageHandler;
+
+#ifdef ENABLE_ENCODER_GENERIC
+struct QZXingEncoderConfig;
+#endif // ENABLE_ENCODER_GENERIC
 
 /**
   * A class containing a very very small subset of the ZXing library.
@@ -98,10 +102,10 @@ public:
         EncodeErrorCorrectionLevel_H
     };
 
-    QZXing(QObject *parent = ZXING_NULLPTR);
+    QZXing(QObject *parent = Q_NULLPTR);
     ~QZXing();
 
-    QZXing(DecoderFormat decodeHints, QObject *parent = ZXING_NULLPTR);
+    QZXing(DecoderFormat decodeHints, QObject *parent = Q_NULLPTR);
 
 #ifdef QZXING_QML
 
@@ -110,7 +114,7 @@ public:
 #endif //QT_VERSION >= Qt 4.7
 
 #if  QT_VERSION >= 0x050000
-    static void registerQMLImageProvider(QQmlEngine& view);
+    static void registerQMLImageProvider(QQmlEngine& engine);
 #endif //QT_VERSION >= Qt 5.0
 
 #endif //QZXING_QML
@@ -176,13 +180,23 @@ public slots:
                               const int offsetX = 0, const int offsetY = 0,
                               const int width = 0, const int height = 0);
 
+#ifdef ENABLE_ENCODER_GENERIC
     /**
      * The main encoding function. Currently supports only Qr code encoding
+     */
+    static QImage encodeData(const QString &data,
+                             const QZXingEncoderConfig &encoderConfig);
+
+    /**
+     * Overloaded function of encodeData.
      */
     static QImage encodeData(const QString& data,
                              const EncoderFormat encoderFormat = EncoderFormat_QR_CODE,
                              const QSize encoderImageSize = QSize(240, 240),
-                             const EncodeErrorCorrectionLevel errorCorrectionLevel = EncodeErrorCorrectionLevel_L);
+                             const EncodeErrorCorrectionLevel errorCorrectionLevel = EncodeErrorCorrectionLevel_L,
+                             const bool border = false,
+                             const bool transparent = false);
+#endif // ENABLE_ENCODER_GENERIC
 
     /**
       * Get the prossecing time in millisecond of the last decode operation.
@@ -229,6 +243,25 @@ private:
       */
     bool isThreaded;
 };
+
+#ifdef ENABLE_ENCODER_GENERIC
+typedef struct QZXingEncoderConfig
+{
+    QZXing::EncoderFormat format;
+    QSize imageSize;
+    QZXing::EncodeErrorCorrectionLevel errorCorrectionLevel;
+    bool border;
+    bool transparent;
+
+    QZXingEncoderConfig(const QZXing::EncoderFormat encoderFormat_ = QZXing::EncoderFormat_QR_CODE,
+                        const QSize encoderImageSize_ = QSize(240, 240),
+                        const QZXing::EncodeErrorCorrectionLevel errorCorrectionLevel_ = QZXing::EncodeErrorCorrectionLevel_L,
+                        const bool border_ = false,
+                        const bool transparent_ = false) :
+        format(encoderFormat_), imageSize(encoderImageSize_),
+        errorCorrectionLevel(errorCorrectionLevel_), border(border_), transparent(transparent_) {}
+} QZXingEncoderConfig;
+#endif // ENABLE_ENCODER_GENERIC
 
 #endif // QZXING_H
 

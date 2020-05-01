@@ -19,9 +19,9 @@ namespace {
         const int D = int(U) - 128;
         const int E = int(V) - 128;
         return gray(
-            qBound<uchar>(0, uchar((298 * C + 409 * E + 128) >> 8), 255),
-            qBound<uchar>(0, uchar((298 * C - 100 * D - 208 * E + 128) >> 8), 255),
-            qBound<uchar>(0, uchar((298 * C + 516 * D + 128) >> 8), 255)
+            qBound(0, ((298 * C + 409 * E + 128) >> 8), 255),
+            qBound(0, ((298 * C - 100 * D - 208 * E + 128) >> 8), 255),
+            qBound(0, ((298 * C + 516 * D + 128) >> 8), 255)
         );
     }
 
@@ -103,7 +103,7 @@ QVideoFrame QZXingFilterRunnable::run(QVideoFrame * input, const QVideoSurfaceFo
     if(!input || !input->isValid())
     {
         //qDebug() << "[QZXingFilterRunnable] Invalid Input ";
-        return * input;
+        return QVideoFrame();
     }
     if(filter->isDecoding())
     {
@@ -203,6 +203,35 @@ static QImage* rgbDataToGrayscale(const uchar* data, const CaptureRect& captureR
     return image_ptr;
 }
 
+static void YUV_NV21_TO_RGB(uchar* argb, const uchar* yuv, int width, int height) {
+    int frameSize = width * height;
+
+    int ii = 0;
+    int ij = 0;
+    int di = +1;
+    int dj = +1;
+
+    int a = 0;
+    for (int i = 0, ci = ii; i < height; ++i, ci += di) {
+        for (int j = 0, cj = ij; j < width; ++j, cj += dj) {
+            int y = (0xff & ((int) yuv[ci * width + cj]));
+            int v = (0xff & ((int) yuv[frameSize + (ci >> 1) * width + (cj & ~1) + 0]));
+            int u = (0xff & ((int) yuv[frameSize + (ci >> 1) * width + (cj & ~1) + 1]));
+            y = y < 16 ? 16 : y;
+
+            int r = (int) (1.164f * (y - 16) + 1.596f * (v - 128));
+            int g = (int) (1.164f * (y - 16) - 0.813f * (v - 128) - 0.391f * (u - 128));
+            int b = (int) (1.164f * (y - 16) + 2.018f * (u - 128));
+
+            r = r < 0 ? 0 : (r > 255 ? 255 : r);
+            g = g < 0 ? 0 : (g > 255 ? 255 : g);
+            b = b < 0 ? 0 : (b > 255 ? 255 : b);
+
+            argb[a++] = 0xff000000 | (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
 void QZXingFilterRunnable::processVideoFrameProbed(SimpleVideoFrame & videoFrame, const QRect& _captureRect)
 {
     if (videoFrame.data.length() < 1) {
@@ -263,8 +292,7 @@ void QZXingFilterRunnable::processVideoFrameProbed(SimpleVideoFrame & videoFrame
         image_ptr = new QImage(data, width, height, QImage::Format_RGB16);
         break;
     case QVideoFrame::Format_YUV420P:
-    case QVideoFrame::Format_NV12:
-        /// nv12 format, encountered on macOS
+        /// Format_YUV420P format, encountered on raspberry pi
         image_ptr = new QImage(captureRect.targetWidth, captureRect.targetHeight, QImage::Format_Grayscale8);
         pixel = image_ptr->bits();
         wh = width * height;
@@ -286,6 +314,11 @@ void QZXingFilterRunnable::processVideoFrameProbed(SimpleVideoFrame & videoFrame
             }
         }
 
+        break;
+    case QVideoFrame::Format_NV12:
+        /// nv12 format, encountered on macOS
+        image_ptr = new QImage(captureRect.targetWidth, captureRect.targetHeight, QImage::Format_Grayscale8);
+        YUV_NV21_TO_RGB((uchar*) image_ptr->bits(), (const uchar*) yuvPtr, width, height);
         break;
     case QVideoFrame::Format_YUYV:
         image_ptr = new QImage(captureRect.targetWidth, captureRect.targetHeight, QImage::Format_Grayscale8);
